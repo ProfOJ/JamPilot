@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JamPilot — Your AI Play-Along Band</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <style>
+    :root {
+      --bg-deep: #0a0a0f;
+      --bg-card: #111118;
+      --bg-card-hover: #1a1a24;
+      --accent-primary: #f97316;
+      --accent-secondary: #fb923c;
+      --accent-glow: rgba(249, 115, 22, 0.3);
+      --accent-subtle: rgba(249, 115, 22, 0.08);
+      --text-primary: #f1f1f4;
+      --text-secondary: #8b8b9e;
+      --text-muted: #55556a;
+      --border: #1e1e2a;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --radius: 12px;
+      --radius-lg: 20px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Ambient Background ── */
+    .ambient-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .ambient-bg .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.15;
+      animation: float 20s ease-in-out infinite;
+    }
+    .ambient-bg .orb:nth-child(1) {
+      width: 600px; height: 600px;
+      background: var(--accent-primary);
+      top: -200px; left: -100px;
+      animation-delay: 0s;
+    }
+    .ambient-bg .orb:nth-child(2) {
+      width: 500px; height: 500px;
+      background: #7c3aed;
+      bottom: -200px; right: -100px;
+      animation-delay: -7s;
+    }
+    .ambient-bg .orb:nth-child(3) {
+      width: 300px; height: 300px;
+      background: #06b6d4;
+      top: 50%; left: 50%;
+      animation-delay: -14s;
+    }
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(30px, -40px) scale(1.05); }
+      66% { transform: translate(-20px, 30px) scale(0.95); }
+    }
+
+    /* ── Layout ── */
+    .app-container {
+      position: relative;
+      z-index: 1;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 24px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .logo-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-subtle);
+      border: 1px solid rgba(249, 115, 22, 0.15);
+      border-radius: 100px;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent-primary);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .logo-mark svg { width: 16px; height: 16px; }
+    .header h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(48px, 8vw, 72px);
+      font-weight: 400;
+      line-height: 1;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header p {
+      font-size: 17px;
+      color: var(--text-secondary);
+      max-width: 520px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── Setup Panel ── */
+    .setup-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px;
+      margin-bottom: 32px;
+    }
+    .setup-panel h2 {
+      font-family: 'Instrument Serif', serif;
+      font-size: 28px;
+      font-weight: 400;
+      margin-bottom: 28px;
+    }
+
+    .setup-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .field-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .option-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      padding: 8px 16px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .chip:hover {
+      border-color: var(--accent-primary);
+      color: var(--text-primary);
+      background: var(--accent-subtle);
+    }
+    .chip.active {
+      border-color: var(--accent-primary);
+      background: var(--accent-primary);
+      color: #fff;
+      font-weight: 500;
+    }
+
+    /* ── API Key Input ── */
+    .api-key-section {
+      margin-bottom: 28px;
+      padding: 20px;
+      background: rgba(249, 115, 22, 0.04);
+      border: 1px solid rgba(249, 115, 22, 0.1);
+      border-radius: var(--radius);
+    }
+    .api-key-section label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .api-key-row {
+      display: flex;
+      gap: 10px;
+    }
+    .api-key-row input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      outline: none;
+    }
+    .api-key-row input:focus {
+      border-color: var(--accent-primary);
+    }
+    .api-key-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+    .api-key-hint a {
+      color: var(--accent-primary);
+      text-decoration: none;
+    }
+
+    /* ── BPM Selector ── */
+    .bpm-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+      padding: 16px 20px;
+      background: var(--bg-deep);
+      border-radius: var(--radius);
+    }
+    .bpm-section label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .bpm-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+      outline: none;
+    }
+    .bpm-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--accent-primary);
+      cursor: pointer;
+    }
+    .bpm-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--accent-primary);
+      min-width: 60px;
+      text-align: right;
+    }
+
+    /* ── Start Button ── */
+    .start-btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: var(--radius);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      background: linear-gradient(135deg, var(--accent-primary), #ea580c);
+      color: white;
+      letter-spacing: 0.02em;
+    }
+    .start-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px var(--accent-glow);
+    }
+    .start-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* ── Live Session Panel ── */
+    .session-panel {
+      display: none;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px;
+      text-align: center;
+    }
+    .session-panel.active { display: block; }
+
+    .session-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    .session-status.listening {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+      color: var(--success);
+    }
+    .session-status.playing {
+      background: var(--accent-subtle);
+      border: 1px solid rgba(249, 115, 22, 0.2);
+      color: var(--accent-primary);
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    /* ── Visualizer ── */
+    .visualizer-container {
+      position: relative;
+      height: 200px;
+      margin: 24px 0;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+    }
+    #visualizer {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Detected Info ── */
+    .detected-info {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .info-card {
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .info-card .label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .info-card .value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--accent-primary);
+    }
+
+    /* ── Chord Progression Display ── */
+    .chord-display {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+    .chord-badge {
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      transition: all 0.3s;
+    }
+    .chord-badge.current {
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+      background: var(--accent-subtle);
+      box-shadow: 0 0 20px var(--accent-glow);
+      transform: scale(1.1);
+    }
+
+    /* ── Stop Button ── */
+    .stop-btn {
+      padding: 14px 48px;
+      border: 2px solid var(--danger);
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--danger);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 20px;
+    }
+    .stop-btn:hover {
+      background: var(--danger);
+      color: white;
+    }
+
+    /* ── Log / Transcript ── */
+    .log-panel {
+      margin-top: 24px;
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+      text-align: left;
+    }
+    .log-panel h4 {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .log-entry {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(30, 30, 42, 0.5);
+    }
+    .log-entry .timestamp {
+      color: var(--text-muted);
+      margin-right: 8px;
+    }
+    .log-entry .highlight {
+      color: var(--accent-primary);
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      margin-top: 48px;
+      padding: 20px;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .footer a {
+      color: var(--accent-primary);
+      text-decoration: none;
+    }
+    .footer .powered-by {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 100px;
+      background: var(--accent-subtle);
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .setup-grid { grid-template-columns: 1fr; }
+      .detected-info { grid-template-columns: 1fr; }
+      .app-container { padding: 24px 16px; }
+      .setup-panel, .session-panel { padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-bg">
+    <div class="orb"></div>
+    <div class="orb"></div>
+    <div class="orb"></div>
+  </div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 18V5l12-2v13"/>
+          <circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        </svg>
+        JamPilot
+      </div>
+      <h1>Your AI Band</h1>
+      <p>Select your vibe. Start singing or playing. JamPilot listens, detects your key & tempo, and plays along in real-time.</p>
+    </header>
+
+    <!-- Setup Panel -->
+    <div class="setup-panel" id="setupPanel">
+      <h2>Set the Stage</h2>
+
+      <!-- API Key -->
+      <div class="api-key-section">
+        <label>Gemini API Key</label>
+        <div class="api-key-row">
+          <input type="password" id="apiKeyInput" placeholder="Enter your Gemini API key..." />
+        </div>
+        <p class="api-key-hint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a></p>
+      </div>
+
+      <!-- Genre -->
+      <div class="setup-grid">
+        <div class="field-group">
+          <label>Genre</label>
+          <div class="option-chips" data-field="genre">
+            <button class="chip" data-value="highlife">🇬🇭 Highlife</button>
+            <button class="chip" data-value="afrobeats">🥁 Afrobeats</button>
+            <button class="chip" data-value="jazz">🎷 Jazz</button>
+            <button class="chip" data-value="reggae">🇯🇲 Reggae</button>
+            <button class="chip" data-value="blues">🎸 Blues</button>
+            <button class="chip" data-value="hiphop">🎤 Hip-Hop</button>
+            <button class="chip" data-value="amapiano">🇿🇦 Amapiano</button>
+            <button class="chip" data-value="gospel">⛪ Gospel</button>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label>Locality</label>
+          <div class="option-chips" data-field="locality">
+            <button class="chip" data-value="ghana">Ghana</button>
+            <button class="chip" data-value="nigeria">Nigeria</button>
+            <button class="chip" data-value="south_africa">South Africa</button>
+            <button class="chip" data-value="jamaica">Jamaica</button>
+            <button class="chip" data-value="usa">USA</button>
+            <button class="chip" data-value="uk">UK</button>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label>Accompaniment</label>
+          <div class="option-chips" data-field="instrument">
+            <button class="chip" data-value="guitar">🎸 Guitar</button>
+            <button class="chip" data-value="bass">🎸 Bass</button>
+            <button class="chip" data-value="piano">🎹 Piano</button>
+            <button class="chip" data-value="drums">🥁 Drums</button>
+            <button class="chip" data-value="full_band">🎵 Full Band</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- BPM -->
+      <div class="bpm-section">
+        <label>Tempo</label>
+        <input type="range" class="bpm-slider" id="bpmSlider" min="60" max="180" value="110" />
+        <div class="bpm-value"><span id="bpmDisplay">110</span> BPM</div>
+      </div>
+
+      <button class="start-btn" id="startBtn" onclick="startSession()">
+        🎤 Start Jamming
+      </button>
+    </div>
+
+    <!-- Live Session Panel -->
+    <div class="session-panel" id="sessionPanel">
+      <div class="session-status listening" id="sessionStatus">
+        <span class="status-dot"></span>
+        <span id="statusText">Listening...</span>
+      </div>
+
+      <div class="visualizer-container">
+        <canvas id="visualizer"></canvas>
+      </div>
+
+      <div class="detected-info">
+        <div class="info-card">
+          <div class="label">Key</div>
+          <div class="value" id="detectedKey">—</div>
+        </div>
+        <div class="info-card">
+          <div class="label">Tempo</div>
+          <div class="value" id="detectedTempo">—</div>
+        </div>
+        <div class="info-card">
+          <div class="label">Feel</div>
+          <div class="value" id="detectedFeel" style="font-size:16px;">—</div>
+        </div>
+      </div>
+
+      <div class="chord-display" id="chordDisplay">
+        <!-- Chord badges populated dynamically -->
+      </div>
+
+      <div class="log-panel" id="logPanel">
+        <h4>Session Log</h4>
+        <div id="logEntries"></div>
+      </div>
+
+      <button class="stop-btn" id="stopBtn" onclick="stopSession()">
+        ■ Stop Session
+      </button>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="powered-by">⚡ Powered by Gemini 3</div>
+      <br />
+      Built by <a href="https://github.com/profoj" target="_blank">Joshua Odoi</a> — Gemini 3 Global Hackathon 2025
+    </footer>
+  </div>
+
+<script>
+  // ═══════════════════════════════════════════════
+  //  JAMPILOT — AI PLAY-ALONG BAND
+  //  Uses Gemini 3 API + Tone.js
+  // ═══════════════════════════════════════════════
+
+  // ── State ──
+  const state = {
+    genre: null,
+    locality: null,
+    instrument: null,
+    bpm: 110,
+    apiKey: null,
+    isPlaying: false,
+    currentKey: null,
+    currentChords: [],
+    currentChordIndex: 0,
+    sessionStartTime: null,
+  };
+
+  let audioContext, analyser, micStream, dataArray, animFrameId;
+  let geminiInterval, chordLoop, transportStarted = false;
+
+  // ── Chip Selection ──
+  document.querySelectorAll('.option-chips').forEach(group => {
+    group.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        group.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        const field = group.dataset.field;
+        state[field] = chip.dataset.value;
+      });
+    });
+  });
+
+  // ── BPM Slider ──
+  const bpmSlider = document.getElementById('bpmSlider');
+  const bpmDisplay = document.getElementById('bpmDisplay');
+  bpmSlider.addEventListener('input', () => {
+    state.bpm = parseInt(bpmSlider.value);
+    bpmDisplay.textContent = state.bpm;
+  });
+
+  // ═══════════════════════════════════════════════
+  //  GENRE-SPECIFIC CHORD PROGRESSIONS & PATTERNS
+  // ═══════════════════════════════════════════════
+  const genreProfiles = {
+    highlife: {
+      progressions: {
+        C: ['C', 'Am', 'F', 'G'], D: ['D', 'Bm', 'G', 'A'],
+        G: ['G', 'Em', 'C', 'D'], E: ['E', 'C#m', 'A', 'B'],
+        F: ['F', 'Dm', 'Bb', 'C'], A: ['A', 'F#m', 'D', 'E'],
+      },
+      feel: 'Relaxed & Groovy',
+      rhythmPattern: [1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1],
+      swingAmount: 0.2,
+    },
+    afrobeats: {
+      progressions: {
+        C: ['C', 'G', 'Am', 'F'], D: ['D', 'A', 'Bm', 'G'],
+        G: ['G', 'D', 'Em', 'C'], E: ['E', 'B', 'C#m', 'A'],
+        F: ['F', 'C', 'Dm', 'Bb'], A: ['A', 'E', 'F#m', 'D'],
+      },
+      feel: 'Driving & Percussive',
+      rhythmPattern: [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0],
+      swingAmount: 0.1,
+    },
+    jazz: {
+      progressions: {
+        C: ['Cmaj7', 'Dm7', 'G7', 'Cmaj7'], D: ['Dmaj7', 'Em7', 'A7', 'Dmaj7'],
+        G: ['Gmaj7', 'Am7', 'D7', 'Gmaj7'], F: ['Fmaj7', 'Gm7', 'C7', 'Fmaj7'],
+        Bb: ['Bbmaj7', 'Cm7', 'F7', 'Bbmaj7'], Eb: ['Ebmaj7', 'Fm7', 'Bb7', 'Ebmaj7'],
+      },
+      feel: 'Smooth & Chromatic',
+      rhythmPattern: [1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0],
+      swingAmount: 0.6,
+    },
+    reggae: {
+      progressions: {
+        C: ['C', 'G', 'Am', 'F'], D: ['D', 'A', 'Bm', 'G'],
+        G: ['G', 'D', 'Em', 'C'], A: ['A', 'E', 'F#m', 'D'],
+        E: ['E', 'B', 'C#m', 'A'], F: ['F', 'C', 'Dm', 'Bb'],
+      },
+      feel: 'Off-beat & Laid-back',
+      rhythmPattern: [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+      swingAmount: 0.3,
+    },
+    blues: {
+      progressions: {
+        E: ['E7', 'E7', 'A7', 'E7'], A: ['A7', 'A7', 'D7', 'A7'],
+        G: ['G7', 'G7', 'C7', 'G7'], C: ['C7', 'C7', 'F7', 'C7'],
+        D: ['D7', 'D7', 'G7', 'D7'], B: ['B7', 'B7', 'E7', 'B7'],
+      },
+      feel: 'Soulful & Swinging',
+      rhythmPattern: [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0],
+      swingAmount: 0.5,
+    },
+    hiphop: {
+      progressions: {
+        C: ['Cm', 'Ab', 'Eb', 'Bb'], D: ['Dm', 'Bb', 'F', 'C'],
+        G: ['Gm', 'Eb', 'Bb', 'F'], A: ['Am', 'F', 'C', 'G'],
+        E: ['Em', 'C', 'G', 'D'], F: ['Fm', 'Db', 'Ab', 'Eb'],
+      },
+      feel: 'Hard & Rhythmic',
+      rhythmPattern: [1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0],
+      swingAmount: 0.05,
+    },
+    amapiano: {
+      progressions: {
+        C: ['Cm', 'Ab', 'Fm', 'G'], D: ['Dm', 'Bb', 'Gm', 'A'],
+        A: ['Am', 'F', 'Dm', 'E'], G: ['Gm', 'Eb', 'Cm', 'D'],
+        E: ['Em', 'C', 'Am', 'B'], F: ['Fm', 'Db', 'Bbm', 'C'],
+      },
+      feel: 'Bouncy & Deep',
+      rhythmPattern: [1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0],
+      swingAmount: 0.15,
+    },
+    gospel: {
+      progressions: {
+        C: ['C', 'Am7', 'Dm7', 'G7'], D: ['D', 'Bm7', 'Em7', 'A7'],
+        G: ['G', 'Em7', 'Am7', 'D7'], F: ['F', 'Dm7', 'Gm7', 'C7'],
+        Bb: ['Bb', 'Gm7', 'Cm7', 'F7'], Eb: ['Eb', 'Cm7', 'Fm7', 'Bb7'],
+      },
+      feel: 'Uplifting & Rich',
+      rhythmPattern: [1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0],
+      swingAmount: 0.3,
+    },
+  };
+
+  // ── Chord-to-Notes mapping ──
+  const chordNotes = {
+    'C': ['C4','E4','G4'], 'Cm': ['C4','Eb4','G4'], 'C7': ['C4','E4','G4','Bb4'],
+    'Cmaj7': ['C4','E4','G4','B4'], 'Cm7': ['C4','Eb4','G4','Bb4'],
+    'D': ['D4','F#4','A4'], 'Dm': ['D4','F4','A4'], 'D7': ['D4','F#4','A4','C5'],
+    'Dmaj7': ['D4','F#4','A4','C#5'], 'Dm7': ['D4','F4','A4','C5'],
+    'E': ['E4','G#4','B4'], 'Em': ['E4','G4','B4'], 'E7': ['E4','G#4','B4','D5'],
+    'Emaj7': ['E4','G#4','B4','D#5'], 'Em7': ['E4','G4','B4','D5'],
+    'F': ['F3','A3','C4'], 'Fm': ['F3','Ab3','C4'], 'F7': ['F3','A3','C4','Eb4'],
+    'Fmaj7': ['F3','A3','C4','E4'], 'Fm7': ['F3','Ab3','C4','Eb4'],
+    'G': ['G3','B3','D4'], 'Gm': ['G3','Bb3','D4'], 'G7': ['G3','B3','D4','F4'],
+    'Gmaj7': ['G3','B3','D4','F#4'], 'Gm7': ['G3','Bb3','D4','F4'],
+    'A': ['A3','C#4','E4'], 'Am': ['A3','C4','E4'], 'A7': ['A3','C#4','E4','G4'],
+    'Amaj7': ['A3','C#4','E4','G#4'], 'Am7': ['A3','C4','E4','G4'],
+    'B': ['B3','D#4','F#4'], 'Bm': ['B3','D4','F#4'], 'B7': ['B3','D#4','F#4','A4'],
+    'Bmaj7': ['B3','D#4','F#4','A#4'], 'Bm7': ['B3','D4','F#4','A4'],
+    'Bb': ['Bb3','D4','F4'], 'Bbmaj7': ['Bb3','D4','F4','A4'],
+    'Bb7': ['Bb3','D4','F4','Ab4'],
+    'Eb': ['Eb4','G4','Bb4'], 'Ebmaj7': ['Eb4','G4','Bb4','D5'],
+    'Ab': ['Ab3','C4','Eb4'], 'Db': ['Db4','F4','Ab4'], 'Bbm': ['Bb3','Db4','F4'],
+    'C#m': ['C#4','E4','G#4'], 'F#m': ['F#3','A3','C#4'],
+    'F#m7': ['F#3','A3','C#4','E4'],
+  };
+
+  // ═══════════════════════════════════════════════
+  //  TONE.JS SYNTH ENGINE
+  // ═══════════════════════════════════════════════
+  let synths = {};
+
+  function buildSynthEngine(instrumentType) {
+    // Dispose old synths
+    Object.values(synths).forEach(s => { try { s.dispose(); } catch(e){} });
+    synths = {};
+
+    const vol = new Tone.Volume(-8).toDestination();
+
+    if (instrumentType === 'guitar' || instrumentType === 'full_band') {
+      synths.guitar = new Tone.PolySynth(Tone.FMSynth, {
+        maxPolyphony: 6,
+        voice0: { modulationIndex: 2, harmonicity: 3.01 },
+        envelope: { attack: 0.01, decay: 0.4, sustain: 0.2, release: 0.8 },
+      }).connect(vol);
+    }
+
+    if (instrumentType === 'bass' || instrumentType === 'full_band') {
+      synths.bass = new Tone.MonoSynth({
+        oscillator: { type: 'fmsawtooth' },
+        envelope: { attack: 0.05, decay: 0.3, sustain: 0.4, release: 0.5 },
+        filterEnvelope: { attack: 0.02, decay: 0.1, sustain: 0.5, release: 0.3, baseFrequency: 80, octaves: 2 },
+      }).connect(new Tone.Volume(-4).toDestination());
+    }
+
+    if (instrumentType === 'piano' || instrumentType === 'full_band') {
+      synths.piano = new Tone.PolySynth(Tone.Synth, {
+        maxPolyphony: 8,
+        oscillator: { type: 'triangle8' },
+        envelope: { attack: 0.005, decay: 0.6, sustain: 0.3, release: 1.2 },
+      }).connect(vol);
+    }
+
+    if (instrumentType === 'drums' || instrumentType === 'full_band') {
+      synths.kick = new Tone.MembraneSynth({
+        pitchDecay: 0.05, octaves: 6, envelope: { attack: 0.001, decay: 0.2, sustain: 0 }
+      }).connect(new Tone.Volume(-2).toDestination());
+
+      synths.snare = new Tone.NoiseSynth({
+        noise: { type: 'white' },
+        envelope: { attack: 0.001, decay: 0.15, sustain: 0 },
+      }).connect(new Tone.Volume(-8).toDestination());
+
+      synths.hihat = new Tone.MetalSynth({
+        frequency: 400, envelope: { attack: 0.001, decay: 0.05, release: 0.01 },
+        harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5,
+      }).connect(new Tone.Volume(-16).toDestination());
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  //  ACCOMPANIMENT LOOP
+  // ═══════════════════════════════════════════════
+  let loopStep = 0;
+
+  function startAccompaniment() {
+    const profile = genreProfiles[state.genre];
+    if (!profile) return;
+
+    Tone.Transport.bpm.value = state.bpm;
+    Tone.Transport.swing = profile.swingAmount;
+
+    // Main loop — plays one 16th note per step
+    chordLoop = new Tone.Loop((time) => {
+      if (!state.isPlaying || !state.currentChords.length) return;
+
+      const step = loopStep % 16;
+      const barPosition = Math.floor(loopStep / 16) % state.currentChords.length;
+      const currentChord = state.currentChords[barPosition];
+      const notes = chordNotes[currentChord] || chordNotes['C'];
+      const pattern = profile.rhythmPattern;
+
+      // Update current chord highlight
+      if (step === 0) {
+        state.currentChordIndex = barPosition;
+        updateChordHighlight();
+      }
+
+      // ── Guitar / Piano ──
+      if (pattern[step] === 1) {
+        if (synths.guitar) {
+          synths.guitar.triggerAttackRelease(notes, '8n', time, 0.5 + Math.random() * 0.2);
+        }
+        if (synths.piano) {
+          synths.piano.triggerAttackRelease(notes, '8n', time, 0.4 + Math.random() * 0.2);
+        }
+      }
+
+      // ── Bass (root note on beats 1 and 3) ──
+      if (synths.bass && (step === 0 || step === 8)) {
+        const rootNote = notes[0].replace(/\d/, '2');
+        synths.bass.triggerAttackRelease(rootNote, '4n', time, 0.7);
+      }
+
+      // ── Drums ──
+      if (synths.kick && (step === 0 || step === 8)) {
+        synths.kick.triggerAttackRelease('C1', '8n', time, 0.9);
+      }
+      if (synths.snare && (step === 4 || step === 12)) {
+        synths.snare.triggerAttackRelease('8n', time, 0.6);
+      }
+      if (synths.hihat && step % 2 === 0) {
+        synths.hihat.triggerAttackRelease('32n', time, 0.2 + (step % 4 === 0 ? 0.15 : 0));
+      }
+
+      loopStep++;
+    }, '16n');
+
+    chordLoop.start(0);
+
+    if (!transportStarted) {
+      Tone.Transport.start();
+      transportStarted = true;
+    }
+  }
+
+  function updateChordHighlight() {
+    document.querySelectorAll('.chord-badge').forEach((el, i) => {
+      el.classList.toggle('current', i === state.currentChordIndex);
+    });
+  }
+
+  // ═══════════════════════════════════════════════
+  //  GEMINI 3 API INTEGRATION
+  // ═══════════════════════════════════════════════
+  async function analyzeWithGemini(audioFeatures) {
+    const apiKey = state.apiKey;
+    if (!apiKey) return null;
+
+    const systemPrompt = `You are a music key detection API. You ONLY output valid JSON. Never include explanations, markdown, or backticks. Your entire response must be a single JSON object.`;
+
+    const userPrompt = `Detect the musical key from these audio features:
+avgFreq=${audioFeatures.avgFrequency.toFixed(1)}Hz peakFreq=${audioFeatures.peakFrequency.toFixed(1)}Hz amp=${audioFeatures.amplitude.toFixed(3)} spectralCentroid=${audioFeatures.spectralCentroid.toFixed(1)}Hz zcr=${audioFeatures.zeroCrossingRate.toFixed(4)}
+Genre: ${state.genre}, Region: ${state.locality}, Tempo: ${state.bpm}BPM
+
+RESPOND WITH ONLY THIS JSON (no other text):
+{"key":"C","confidence":0.8,"suggestedBPM":110,"mood":"upbeat","notes":"brief observation"}
+key MUST be one of: C D E F G A B Bb Eb Ab Db`;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ parts: [{ text: userPrompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 150,
+              response_mime_type: 'application/json',
+              response_schema: {
+                type: 'OBJECT',
+                properties: {
+                  key: { type: 'STRING' },
+                  confidence: { type: 'NUMBER' },
+                  suggestedBPM: { type: 'INTEGER' },
+                  mood: { type: 'STRING' },
+                  notes: { type: 'STRING' },
+                },
+                required: ['key', 'confidence', 'suggestedBPM', 'mood', 'notes'],
+              },
+            },
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      // Check for API errors
+      if (data.error) {
+        addLog(`API error: ${data.error.message}`, true);
+        return null;
+      }
+
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        addLog('No response from Gemini', true);
+        return null;
+      }
+
+      // Robust JSON extraction — find the JSON object even if wrapped in text
+      let jsonStr = text;
+      // Strip markdown code fences
+      jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+      // Try to find a JSON object in the text
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0];
+      }
+
+      const parsed = JSON.parse(jsonStr.trim());
+
+      // Validate key is in our allowed set
+      const validKeys = ['C','D','E','F','G','A','B','Bb','Eb','Ab','Db'];
+      if (!validKeys.includes(parsed.key)) {
+        parsed.key = 'C'; // Safe fallback
+      }
+
+      return parsed;
+    } catch (err) {
+      addLog('Gemini parse error: ' + err.message, true);
+      return null;
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  //  AUDIO ANALYSIS (Mic → Features)
+  // ═══════════════════════════════════════════════
+  function extractAudioFeatures() {
+    if (!analyser || !dataArray) return null;
+
+    analyser.getByteFrequencyData(dataArray);
+    const bufLen = dataArray.length;
+    const sampleRate = audioContext.sampleRate;
+
+    let sum = 0, peak = 0, peakIndex = 0, weightedSum = 0, totalAmplitude = 0;
+    let zeroCrossings = 0;
+
+    for (let i = 0; i < bufLen; i++) {
+      const val = dataArray[i];
+      sum += val;
+      totalAmplitude += val / 255;
+      weightedSum += val * i;
+      if (val > peak) { peak = val; peakIndex = i; }
+      if (i > 0 && ((dataArray[i - 1] > 128) !== (val > 128))) zeroCrossings++;
+    }
+
+    const avg = sum / bufLen;
+    const freqResolution = sampleRate / (bufLen * 2);
+    const avgFrequency = (weightedSum / sum) * freqResolution || 0;
+    const peakFrequency = peakIndex * freqResolution;
+    const amplitude = totalAmplitude / bufLen;
+    const spectralCentroid = avgFrequency;
+    const zeroCrossingRate = zeroCrossings / bufLen;
+
+    return { avgFrequency, peakFrequency, amplitude, spectralCentroid, zeroCrossingRate };
+  }
+
+  // ═══════════════════════════════════════════════
+  //  VISUALIZER
+  // ═══════════════════════════════════════════════
+  function drawVisualizer() {
+    const canvas = document.getElementById('visualizer');
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.offsetWidth * 2;
+    canvas.height = canvas.offsetHeight * 2;
+    ctx.scale(2, 2);
+
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+
+    function draw() {
+      animFrameId = requestAnimationFrame(draw);
+      if (!analyser) return;
+
+      analyser.getByteFrequencyData(dataArray);
+      ctx.fillStyle = 'rgba(10, 10, 15, 0.15)';
+      ctx.fillRect(0, 0, w, h);
+
+      const barCount = 64;
+      const barWidth = w / barCount;
+      const step = Math.floor(dataArray.length / barCount);
+
+      for (let i = 0; i < barCount; i++) {
+        const val = dataArray[i * step] / 255;
+        const barH = val * h * 0.85;
+
+        const hue = 20 + val * 15;
+        const saturation = 80 + val * 20;
+        const lightness = 40 + val * 20;
+
+        ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${0.6 + val * 0.4})`;
+
+        const x = i * barWidth;
+        const radius = Math.min(barWidth / 2 - 1, 4);
+
+        ctx.beginPath();
+        ctx.roundRect(x + 1, h - barH, barWidth - 2, barH, [radius, radius, 0, 0]);
+        ctx.fill();
+
+        // Mirror (subtle)
+        ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${val * 0.15})`;
+        ctx.beginPath();
+        ctx.roundRect(x + 1, h, barWidth - 2, barH * 0.3, [0, 0, radius, radius]);
+        ctx.fill();
+      }
+    }
+    draw();
+  }
+
+  // ═══════════════════════════════════════════════
+  //  SESSION MANAGEMENT
+  // ═══════════════════════════════════════════════
+  async function startSession() {
+    // Validate
+    state.apiKey = document.getElementById('apiKeyInput').value.trim();
+    if (!state.apiKey) { alert('Please enter your Gemini API key.'); return; }
+    if (!state.genre) { alert('Please select a genre.'); return; }
+    if (!state.locality) { alert('Please select a locality.'); return; }
+    if (!state.instrument) { alert('Please select an instrument.'); return; }
+
+    state.isPlaying = true;
+    state.sessionStartTime = Date.now();
+    loopStep = 0;
+
+    // Switch panels
+    document.getElementById('setupPanel').style.display = 'none';
+    document.getElementById('sessionPanel').classList.add('active');
+
+    addLog(`Session started: ${state.genre} / ${state.locality} / ${state.instrument} / ${state.bpm} BPM`);
+
+    // Start mic
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(micStream);
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      addLog('🎤 Microphone connected');
+    } catch (err) {
+      addLog('Mic error: ' + err.message, true);
+      return;
+    }
+
+    // Start visualizer
+    drawVisualizer();
+
+    // Build synth engine
+    await Tone.start();
+    buildSynthEngine(state.instrument);
+    addLog(`🎹 Synth engine ready: ${state.instrument}`);
+
+    // Set initial chord progression (fallback to C)
+    setChordProgression('C');
+
+    // Start Gemini analysis loop
+    let analysisCount = 0;
+    const SILENCE_THRESHOLD = 0.02;
+
+    addLog('👂 Listening for your performance...');
+    updateStatus('listening', 'Listening — start singing or playing...');
+
+    geminiInterval = setInterval(async () => {
+      if (!state.isPlaying) return;
+
+      const features = extractAudioFeatures();
+      if (!features || features.amplitude < SILENCE_THRESHOLD) {
+        return; // Silence — keep listening
+      }
+
+      analysisCount++;
+      addLog(`🔍 Analyzing audio (sample #${analysisCount})...`);
+      updateStatus('listening', 'Analyzing your key...');
+
+      const result = await analyzeWithGemini(features);
+      if (result && result.key) {
+        const keyChanged = state.currentKey !== result.key;
+        state.currentKey = result.key;
+
+        document.getElementById('detectedKey').textContent = result.key;
+        document.getElementById('detectedTempo').textContent = result.suggestedBPM || state.bpm;
+        document.getElementById('detectedFeel').textContent = result.mood || genreProfiles[state.genre]?.feel || '—';
+
+        if (keyChanged) {
+          setChordProgression(result.key);
+          addLog(`🎵 Key detected: <span class="highlight">${result.key}</span> (confidence: ${(result.confidence * 100).toFixed(0)}%)`);
+          if (result.notes) addLog(`💡 ${result.notes}`);
+
+          // Start playing on first detection
+          if (analysisCount <= 2) {
+            startAccompaniment();
+            addLog('🎸 Accompaniment started!');
+          }
+        }
+
+        // Update tempo if Gemini suggests different
+        if (result.suggestedBPM && Math.abs(result.suggestedBPM - state.bpm) > 5) {
+          Tone.Transport.bpm.rampTo(result.suggestedBPM, 2);
+          state.bpm = result.suggestedBPM;
+        }
+
+        updateStatus('playing', `Playing along in ${result.key} — ${genreProfiles[state.genre]?.feel || 'Grooving'}`);
+      }
+    }, 4000); // Analyze every 4 seconds
+  }
+
+  function setChordProgression(key) {
+    const profile = genreProfiles[state.genre];
+    if (!profile) return;
+
+    // Find closest matching key
+    const progressionKeys = Object.keys(profile.progressions);
+    let bestKey = progressionKeys[0];
+    if (progressionKeys.includes(key)) {
+      bestKey = key;
+    }
+
+    state.currentChords = profile.progressions[bestKey];
+    state.currentChordIndex = 0;
+
+    // Update chord display
+    const display = document.getElementById('chordDisplay');
+    display.innerHTML = state.currentChords.map((chord, i) =>
+      `<div class="chord-badge ${i === 0 ? 'current' : ''}">${chord}</div>`
+    ).join('');
+  }
+
+  function stopSession() {
+    state.isPlaying = false;
+
+    // Stop audio
+    if (chordLoop) { chordLoop.stop(); chordLoop.dispose(); }
+    if (transportStarted) { Tone.Transport.stop(); transportStarted = false; }
+    Object.values(synths).forEach(s => { try { s.dispose(); } catch(e){} });
+    synths = {};
+
+    // Stop mic
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    if (audioContext) audioContext.close();
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+    if (geminiInterval) clearInterval(geminiInterval);
+
+    addLog('⏹ Session ended');
+
+    // Show duration
+    if (state.sessionStartTime) {
+      const duration = ((Date.now() - state.sessionStartTime) / 1000).toFixed(0);
+      addLog(`Total jam time: ${Math.floor(duration / 60)}m ${duration % 60}s`);
+    }
+
+    // Switch back
+    document.getElementById('sessionPanel').classList.remove('active');
+    document.getElementById('setupPanel').style.display = 'block';
+  }
+
+  // ── Helpers ──
+  function updateStatus(type, text) {
+    const el = document.getElementById('sessionStatus');
+    el.className = `session-status ${type}`;
+    document.getElementById('statusText').textContent = text;
+  }
+
+  function addLog(message, isError = false) {
+    const entries = document.getElementById('logEntries');
+    const now = new Date().toLocaleTimeString();
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerHTML = `<span class="timestamp">${now}</span> ${message}`;
+    if (isError) entry.style.color = 'var(--danger)';
+    entries.prepend(entry);
+
+    // Keep max 50 entries
+    while (entries.children.length > 50) entries.lastChild.remove();
+  }
+</script>
+
+</body>
+</html>
